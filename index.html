@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sitemap Crawler</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="background-glow"></div>
+
+    <main class="container">
+        <header>
+            <h1>Sitemap Crawler</h1>
+            <p>Recursively extract all URLs from any sitemap</p>
+        </header>
+
+        <section class="input-section">
+            <div class="input-group">
+                <input type="url" id="sitemapUrl"
+                    placeholder="Enter sitemap.xml URL (e.g., https://example.com/sitemap.xml)" required>
+                <button id="crawlBtn">
+                    <span class="btn-text">Start Crawl</span>
+                    <div class="loader hidden"></div>
+                </button>
+            </div>
+            <p id="statusMsg" class="status-msg"></p>
+        </section>
+
+        <section id="resultsSection" class="results-section hidden">
+            <div class="results-header">
+                <h2>Results <span id="resultCount" class="badge">0</span></h2>
+                <div class="actions">
+                    <button id="copyBtn" class="secondary-btn">Copy All</button>
+                    <button id="downloadBtn" class="secondary-btn">Download CSV</button>
+                </div>
+            </div>
+            <div class="results-container">
+                <ul id="urlList"></ul>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const crawlBtn = document.getElementById('crawlBtn');
+        const sitemapInput = document.getElementById('sitemapUrl');
+        const statusMsg = document.getElementById('statusMsg');
+        const resultsSection = document.getElementById('resultsSection');
+        const urlList = document.getElementById('urlList');
+        const resultCount = document.getElementById('resultCount');
+        const copyBtn = document.getElementById('copyBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const loader = document.querySelector('.loader');
+        const btnText = document.querySelector('.btn-text');
+
+        let foundUrls = [];
+
+        crawlBtn.addEventListener('click', async () => {
+            const url = sitemapInput.value.trim();
+            if (!url) {
+                showStatus('Please enter a valid URL', 'error');
+                return;
+            }
+
+            setLoading(true);
+            showStatus('Crawling... This may take a moment depending on the sitemap size.', 'info');
+            resultsSection.classList.add('hidden');
+            urlList.innerHTML = '';
+            foundUrls = [];
+
+            try {
+                const response = await fetch(`crawler.php?url=${encodeURIComponent(url)}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                if (data.errors && data.errors.length > 0) {
+                    console.warn('Crawler errors:', data.errors);
+                }
+
+                foundUrls = data.urls || [];
+                renderResults(foundUrls);
+                showStatus(`Successfully found ${foundUrls.length} URLs.`, 'success');
+
+            } catch (err) {
+                showStatus(`Error: ${err.message}`, 'error');
+            } finally {
+                setLoading(false);
+            }
+        });
+
+        function renderResults(urls) {
+            resultCount.textContent = urls.length;
+            const fragment = document.createDocumentFragment();
+
+            // Limit display for performance if huge, but for now show all
+            urls.forEach(url => {
+                const li = document.createElement('li');
+                const a = document.createElement('a');
+                a.href = url;
+                a.textContent = url;
+                a.target = '_blank';
+                li.appendChild(a);
+                fragment.appendChild(li);
+            });
+
+            urlList.appendChild(fragment);
+            resultsSection.classList.remove('hidden');
+        }
+
+        function setLoading(isLoading) {
+            crawlBtn.disabled = isLoading;
+            if (isLoading) {
+                loader.classList.remove('hidden');
+                btnText.classList.add('hidden');
+            } else {
+                loader.classList.add('hidden');
+                btnText.classList.remove('hidden');
+            }
+        }
+
+        function showStatus(msg, type) {
+            statusMsg.textContent = msg;
+            statusMsg.className = 'status-msg ' + type;
+        }
+
+        copyBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(foundUrls.join('\n'));
+            const originalText = copyBtn.textContent;
+            copyBtn.textContent = 'Copied!';
+            setTimeout(() => copyBtn.textContent = originalText, 2000);
+        });
+
+        downloadBtn.addEventListener('click', () => {
+            const csvContent = "data:text/csv;charset=utf-8," + foundUrls.join("\n");
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "sitemap_urls.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+    </script>
+</body>
+
+</html>
